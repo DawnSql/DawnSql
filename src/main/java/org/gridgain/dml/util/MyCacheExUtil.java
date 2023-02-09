@@ -3,15 +3,12 @@ package org.gridgain.dml.util;
 import clojure.lang.*;
 import cn.plus.model.*;
 import cn.smart.service.IMyLogTrans;
-import org.apache.ignite.IgniteTransactions;
-import org.apache.ignite.Ignition;
+import org.apache.ignite.*;
 import org.apache.ignite.cache.query.SqlFieldsQuery;
 import org.apache.ignite.configuration.CacheConfiguration;
 import org.apache.ignite.smart.service.MyLogService;
 import org.apache.ignite.transactions.Transaction;
 import org.tools.KvSql;
-import org.apache.ignite.Ignite;
-import org.apache.ignite.IgniteCache;
 import org.apache.ignite.binary.BinaryObject;
 import org.apache.ignite.binary.BinaryObjectBuilder;
 import org.tools.MyLineToBinary;
@@ -30,6 +27,21 @@ public class MyCacheExUtil implements Serializable {
 
     private static IMyLogTrans myLog = MyLogService.getInstance().getMyLog();
 
+    public static void dataStream(final Ignite ignite, final List<MyLogCache> lstLogCache)
+    {
+        if (lstLogCache != null && lstLogCache.size() > 0)
+        {
+            try (IgniteDataStreamer stmr = ignite.dataStreamer(lstLogCache.get(0).getCache_name())) {
+
+                for (MyLogCache m : lstLogCache)
+                {
+                    stmr.addData(convertToKey(ignite, m), convertToValue(ignite, m));
+                }
+                stmr.flush();
+            }
+        }
+    }
+
 //    public static void transLogCache(final Ignite ignite, final List<MyLogCache> lstLogCache)
 //    {
 //        List<MyCacheEx> lstCache = lstLogCache.stream().map(m -> convertToCacheEx(ignite, m)).collect(Collectors.toList());
@@ -39,8 +51,7 @@ public class MyCacheExUtil implements Serializable {
 //        transMyCache(ignite, lstCache);
 //    }
 
-    public static void transLogCache(final Ignite ignite, final List lstLogCache)
-    {
+    public static void transLogCache(final Ignite ignite, final List lstLogCache) throws Exception {
         List<MyCacheEx> lstCache = (List<MyCacheEx>) lstLogCache.stream().map(m -> convertToCacheEx(ignite, m)).collect(Collectors.toList());
 //        if (ignite.configuration().isMyLogEnabled() && myLog != null) {
 //            long log_id = ignite.atomicSequence("my_log", 0, true).incrementAndGet();
@@ -52,29 +63,37 @@ public class MyCacheExUtil implements Serializable {
         }
     }
 
-    public static void transCache(final Ignite ignite, final List<MyLogCache> lstLogCache)
-    {
+    public static void transLogCache_ex(final Ignite ignite, final List lstLogCache) throws Exception {
+        List<MyCacheEx> lstCache = (List<MyCacheEx>) lstLogCache.stream().map(m -> convertToCacheEx(ignite, m)).collect(Collectors.toList());
+//        if (ignite.configuration().isMyLogEnabled() && myLog != null) {
+//            long log_id = ignite.atomicSequence("my_log", 0, true).incrementAndGet();
+//            List<MyCacheEx> lst = (List<MyCacheEx>) lstLogCache.stream().map(m -> new MyCacheEx(ignite.cache("my_log"), log_id, MyCacheExUtil.objToBytes(m), SqlType.INSERT)).collect(Collectors.toList());
+//            lstCache.addAll(lst);
+//        }
+        if (lstCache != null && lstCache.size() > 0) {
+            transLogCache_ex_1(ignite, lstCache);
+        }
+    }
+
+    public static void transCache(final Ignite ignite, final List<MyLogCache> lstLogCache) throws Exception {
         List<MyCacheEx> lstCache = lstLogCache.stream().map(m -> convertToCacheEx(ignite, m)).collect(Collectors.toList());
 
         transMyCache(ignite, lstCache);
     }
 
-    public static void transCache(final Ignite ignite, final PersistentVector lstLogCache)
-    {
+    public static void transCache(final Ignite ignite, final PersistentVector lstLogCache) throws Exception {
         transMyCache(ignite, (List<MyCacheEx>) lstLogCache.stream().map(m -> convertToCacheEx(ignite, (MyLogCache)m)).collect(Collectors.toList()));
     }
 
-    public static void transCache(final Ignite ignite, final PersistentList lstLogCache)
-    {
+    public static void transCache(final Ignite ignite, final PersistentList lstLogCache) throws Exception {
         transMyCache(ignite, (List<MyCacheEx>) lstLogCache.stream().map(m -> convertToCacheEx(ignite, (MyLogCache)m)).collect(Collectors.toList()));
     }
 
-    public static void transCache(final Ignite ignite, final LazySeq lstLogCache)
-    {
+    public static void transCache(final Ignite ignite, final LazySeq lstLogCache) throws Exception {
         transMyCache(ignite, (List<MyCacheEx>) lstLogCache.stream().map(m -> convertToCacheEx(ignite, (MyLogCache)m)).collect(Collectors.toList()));
     }
 
-    private static void transMyCache(final Ignite ignite, final List<MyCacheEx> lstCache) {
+    private static void transMyCache(final Ignite ignite, final List<MyCacheEx> lstCache) throws Exception {
         //List<MyCacheEx> lstCache = lstLogCache.stream().map(m -> convertToCacheEx(ignite, m)).collect(Collectors.toList());
         if (myLog != null)
         {
@@ -87,19 +106,47 @@ public class MyCacheExUtil implements Serializable {
 
                 for (MyCacheEx m : lstCache)
                 {
-                    switch (m.getSqlType()) {
-                        case UPDATE:
-                            m.getCache().replace(m.getKey(), m.getValue());
-                            myLog.saveTo(transSession, MyCacheExUtil.objToBytes(m.getData()));
-                            break;
-                        case INSERT:
-                            m.getCache().put(m.getKey(), m.getValue());
-                            myLog.saveTo(transSession, MyCacheExUtil.objToBytes(m.getData()));
-                            break;
-                        case DELETE:
-                            m.getCache().remove(m.getKey());
-                            myLog.saveTo(transSession, MyCacheExUtil.objToBytes(m.getData()));
-                            break;
+                    if (m == null)
+                    {
+                        throw new Exception("该 cache 不存在！");
+                    }
+                    else if (m.getCache() == null)
+                    {
+                        throw new Exception("该 cache 不存在！");
+                    }
+                    else {
+                        switch (m.getSqlType()) {
+                            case UPDATE:
+                                if (m.getCache().containsKey(m.getKey())) {
+                                    m.getCache().replace(m.getKey(), m.getValue());
+                                    myLog.saveTo(transSession, MyCacheExUtil.objToBytes(m.getData()));
+                                }
+                                else
+                                {
+                                    throw new Exception("该 key 不存在！");
+                                }
+                                break;
+                            case INSERT:
+                                if (!m.getCache().containsKey(m.getKey())) {
+                                    m.getCache().put(m.getKey(), m.getValue());
+                                    myLog.saveTo(transSession, MyCacheExUtil.objToBytes(m.getData()));
+                                }
+                                else
+                                {
+                                    throw new Exception("该 key 已经存在！不能在添加了");
+                                }
+                                break;
+                            case DELETE:
+                                if (m.getCache().containsKey(m.getKey())) {
+                                    m.getCache().remove(m.getKey());
+                                    myLog.saveTo(transSession, MyCacheExUtil.objToBytes(m.getData()));
+                                }
+                                else
+                                {
+                                    throw new Exception("该 key 不存在！");
+                                }
+                                break;
+                        }
                     }
                 }
 
@@ -126,16 +173,129 @@ public class MyCacheExUtil implements Serializable {
 
                 for (MyCacheEx m : lstCache)
                 {
-                    switch (m.getSqlType()) {
-                        case UPDATE:
-                            m.getCache().replace(m.getKey(), m.getValue());
-                            break;
-                        case INSERT:
-                            m.getCache().put(m.getKey(), m.getValue());
-                            break;
-                        case DELETE:
-                            m.getCache().remove(m.getKey());
-                            break;
+                    if (m == null)
+                    {
+                        throw new Exception("该 cache 不存在！");
+                    }
+                    else if (m.getCache() == null)
+                    {
+                        throw new Exception("该 cache 不存在！");
+                    }
+                    else {
+                        switch (m.getSqlType()) {
+                            case UPDATE:
+                                if (m.getCache().containsKey(m.getKey())) {
+                                    m.getCache().replace(m.getKey(), m.getValue());
+                                }
+                                else
+                                {
+                                    throw new Exception("该 key 不存在！");
+                                }
+                                break;
+                            case INSERT:
+                                if (!m.getCache().containsKey(m.getKey())) {
+                                    m.getCache().put(m.getKey(), m.getValue());
+                                }
+                                else
+                                {
+                                    throw new Exception("该 key 已经存在！不能在添加了");
+                                }
+                                break;
+                            case DELETE:
+                                if (m.getCache().containsKey(m.getKey())) {
+                                    m.getCache().remove(m.getKey());
+                                }
+                                else
+                                {
+                                    throw new Exception("该 key 不存在！");
+                                }
+                                break;
+                        }
+                    }
+                }
+
+                tx.commit();
+            } catch (Exception ex) {
+                if (tx != null) {
+                    tx.rollback();
+                }
+                throw ex;
+            } finally {
+                if (tx != null) {
+                    tx.close();
+                }
+            }
+        }
+    }
+
+    private static void transLogCache_ex_1(final Ignite ignite, final List<MyCacheEx> lstCache) throws Exception {
+        //List<MyCacheEx> lstCache = lstLogCache.stream().map(m -> convertToCacheEx(ignite, m)).collect(Collectors.toList());
+        if (myLog != null)
+        {
+            IgniteTransactions transactions = ignite.transactions();
+            Transaction tx = null;
+            String transSession = UUID.randomUUID().toString();
+            try {
+                tx = transactions.txStart();
+                myLog.createSession(transSession);
+
+                for (MyCacheEx m : lstCache)
+                {
+                    if (m != null)
+                    {
+                        switch (m.getSqlType()) {
+                            case UPDATE:
+                                m.getCache().replace(m.getKey(), m.getValue());
+                                myLog.saveTo(transSession, MyCacheExUtil.objToBytes(m.getData()));
+                                break;
+                            case INSERT:
+                                m.getCache().put(m.getKey(), m.getValue());
+                                myLog.saveTo(transSession, MyCacheExUtil.objToBytes(m.getData()));
+                                break;
+                            case DELETE:
+                                m.getCache().remove(m.getKey());
+                                myLog.saveTo(transSession, MyCacheExUtil.objToBytes(m.getData()));
+                                break;
+                        }
+                    }
+                }
+
+                myLog.commit(transSession);
+                tx.commit();
+            } catch (Exception ex) {
+                if (tx != null) {
+                    myLog.rollback(transSession);
+                    tx.rollback();
+                }
+                throw ex;
+            } finally {
+                if (tx != null) {
+                    tx.close();
+                }
+            }
+        }
+        else
+        {
+            IgniteTransactions transactions = ignite.transactions();
+            Transaction tx = null;
+            try {
+                tx = transactions.txStart();
+
+                for (MyCacheEx m : lstCache)
+                {
+                    if (m != null)
+                    {
+                        switch (m.getSqlType()) {
+                            case UPDATE:
+                                m.getCache().replace(m.getKey(), m.getValue());
+                                break;
+                            case INSERT:
+                                m.getCache().put(m.getKey(), m.getValue());
+                                break;
+                            case DELETE:
+                                m.getCache().remove(m.getKey());
+                                break;
+                        }
                     }
                 }
 
@@ -196,7 +356,7 @@ public class MyCacheExUtil implements Serializable {
                     Object key = convertToKey(ignite, logCache);
                     IgniteCache igniteCache = myIgniteCache.withKeepBinary();
                     BinaryObject binaryObject = (BinaryObject) igniteCache.get(key);
-                    if (isLstKv(logCache.getValue())) {
+                    if (binaryObject != null && isLstKv(logCache.getValue())) {
                         BinaryObjectBuilder binaryObjectBuilder = binaryObject.toBuilder();
                         for (MyKeyValue m : (List<MyKeyValue>) logCache.getValue()) {
                             binaryObjectBuilder.setField(m.getName(), m.getValue());
@@ -273,7 +433,14 @@ public class MyCacheExUtil implements Serializable {
     {
         Object key = null;
         if (isLstKv(myLogCache.getKey())) {
-            key = MyCacheExUtil.getKeys(ignite, myLogCache.getCache_name(), (List<MyKeyValue>)myLogCache.getKey());
+            List<MyKeyValue> lst = (List<MyKeyValue>)myLogCache.getKey();
+            if (lst.size() > 1) {
+                key = MyCacheExUtil.getKeys(ignite, myLogCache.getCache_name(), lst);
+            }
+            else if (lst.size() == 1)
+            {
+                key = lst.get(0).getValue();
+            }
         } else {
             key = myLogCache.getKey();
         }

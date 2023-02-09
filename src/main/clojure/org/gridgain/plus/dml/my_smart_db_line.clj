@@ -35,6 +35,15 @@
         :methods [^:static [my_query_sql [org.apache.ignite.Ignite Object java.util.List] Object]]
         ))
 
+;(defn get-re-obj [ignite m]
+;    (if (and (map? m) (contains? m :schema_name) (false? (.isMultiUserGroup (.configuration ignite))))
+;        (cond (my-lexical/is-str-empty? (-> m :schema_name)) (assoc m :schema_name "public")
+;              (my-lexical/is-eq? (-> m :schema_name) "public") (assoc m :schema_name "public")
+;              (my-lexical/is-eq? (-> m :schema_name) "my_meta") (assoc m :schema_name "public")
+;              :else
+;              (throw (Exception. "单用户组只能使用 public")))
+;        m))
+
 ; 在类似 DBeaver 这种工具中开发用的，一条，几条语句一起执行
 
 (defn my-cache-name [^String schema_name ^String table_name]
@@ -42,109 +51,125 @@
         (str/lower-case table_name)
         (format "f_%s_%s" (str/lower-case schema_name) (str/lower-case table_name))))
 
+;(defn insert-to-cache [ignite group_id lst]
+;    (if-let [insert_obj (my-lexical/get-re-obj ignite (my-insert/my_insert_obj ignite group_id lst))]
+;        (let [{pk_rs :pk_rs data_rs :data_rs} (my-insert/get_pk_data_with_data (my-insert/get_pk_data ignite (-> insert_obj :schema_name) (-> insert_obj :table_name)) insert_obj)]
+;            (let [my_pk_rs (my-smart-db/re-pk_rs ignite pk_rs (-> insert_obj :schema_name) (-> insert_obj :table_name))]
+;                (if (or (nil? my_pk_rs) (empty? my_pk_rs))
+;                    (throw (Exception. "插入数据的表不存在，或者主键为空！"))
+;                    (let [my-key (my-smart-db/get-insert-pk ignite group_id my_pk_rs {:dic {}, :keys []}) my-value (my-smart-db/get-insert-data ignite group_id data_rs {:dic {}, :keys []})]
+;                        (cond (and (my-lexical/is-seq? my-key) (empty? my-key)) (throw (Exception. "插入数据主键不能为空！"))
+;                              (nil? my-key) (throw (Exception. "插入数据主键不能为空！"))
+;                              (empty? my-value) (throw (Exception. "插入数据不能为空！"))
+;                              :else (MyLogCache. (my-cache-name (-> insert_obj :schema_name) (-> insert_obj :table_name)) (-> insert_obj :schema_name) (-> insert_obj :table_name) my-key my-value (SqlType/INSERT))
+;                              ))))
+;            ))
+;    )
+
 (defn insert-to-cache [ignite group_id lst]
-    (if-let [insert_obj (my-insert/my_insert_obj ignite group_id lst)]
-        (let [{pk_rs :pk_rs data_rs :data_rs} (my-insert/get_pk_data_with_data (my-insert/get_pk_data ignite (-> insert_obj :schema_name) (-> insert_obj :table_name)) insert_obj)]
-            (let [my_pk_rs (my-smart-db/re-pk_rs ignite pk_rs (-> insert_obj :schema_name) (-> insert_obj :table_name))]
-                (if (or (nil? my_pk_rs) (empty? my_pk_rs))
-                    (throw (Exception. "插入数据的表不存在，或者主键为空！"))
-                    (let [my-key (my-smart-db/get-insert-pk ignite group_id my_pk_rs {:dic {}, :keys []}) my-value (my-smart-db/get-insert-data ignite group_id data_rs {:dic {}, :keys []})]
-                        (cond (and (my-lexical/is-seq? my-key) (empty? my-key)) (throw (Exception. "插入数据主键不能为空！"))
-                              (nil? my-key) (throw (Exception. "插入数据主键不能为空！"))
-                              (empty? my-value) (throw (Exception. "插入数据不能为空！"))
-                              :else (MyLogCache. (my-cache-name (-> insert_obj :schema_name) (-> insert_obj :table_name)) (-> insert_obj :schema_name) (-> insert_obj :table_name) my-key my-value (SqlType/INSERT))
-                              ))))
-            ))
-    )
+    (my-smart-db/insert-to-cache-lst ignite group_id lst nil))
+
+;(defn insert-to-cache-no-authority [ignite group_id lst]
+;    (if-let [insert_obj (my-lexical/get-re-obj ignite (my-insert/my_insert_obj-no-authority ignite group_id lst))]
+;        (let [{pk_rs :pk_rs data_rs :data_rs} (my-insert/get_pk_data_with_data (my-insert/get_pk_data ignite (-> insert_obj :schema_name) (-> insert_obj :table_name)) insert_obj)]
+;            (let [my_pk_rs (my-smart-db/re-pk_rs ignite pk_rs (-> insert_obj :schema_name) (-> insert_obj :table_name))]
+;                (if (or (nil? my_pk_rs) (empty? my_pk_rs))
+;                    (throw (Exception. "插入数据主键不能为空！"))
+;                    (let [my-key (my-smart-db/get-insert-pk ignite group_id my_pk_rs {:dic {}, :keys []}) my-value (my-smart-db/get-insert-data ignite group_id data_rs {:dic {}, :keys []})]
+;                        (cond (and (my-lexical/is-seq? my-key) (empty? my-key)) (throw (Exception. "插入数据主键不能为空！"))
+;                              (nil? my-key) (throw (Exception. "插入数据主键不能为空！"))
+;                              (empty? my-value) (throw (Exception. "插入数据不能为空！"))
+;                              :else (MyLogCache. (my-cache-name (-> insert_obj :schema_name) (-> insert_obj :table_name)) (-> insert_obj :schema_name) (-> insert_obj :table_name) my-key my-value (SqlType/INSERT))
+;                              ))))
+;            ))
+;    )
 
 (defn insert-to-cache-no-authority [ignite group_id lst]
-    (if-let [insert_obj (my-insert/my_insert_obj-no-authority ignite group_id lst)]
-        (let [{pk_rs :pk_rs data_rs :data_rs} (my-insert/get_pk_data_with_data (my-insert/get_pk_data ignite (-> insert_obj :schema_name) (-> insert_obj :table_name)) insert_obj)]
-            (let [my_pk_rs (my-smart-db/re-pk_rs ignite pk_rs (-> insert_obj :schema_name) (-> insert_obj :table_name))]
-                (if (or (nil? my_pk_rs) (empty? my_pk_rs))
-                    (throw (Exception. "插入数据主键不能为空！"))
-                    (let [my-key (my-smart-db/get-insert-pk ignite group_id my_pk_rs {:dic {}, :keys []}) my-value (my-smart-db/get-insert-data ignite group_id data_rs {:dic {}, :keys []})]
-                        (cond (and (my-lexical/is-seq? my-key) (empty? my-key)) (throw (Exception. "插入数据主键不能为空！"))
-                              (nil? my-key) (throw (Exception. "插入数据主键不能为空！"))
-                              (empty? my-value) (throw (Exception. "插入数据不能为空！"))
-                              :else (MyLogCache. (my-cache-name (-> insert_obj :schema_name) (-> insert_obj :table_name)) (-> insert_obj :schema_name) (-> insert_obj :table_name) my-key my-value (SqlType/INSERT))
-                              ))))
-            ))
-    )
+    (my-smart-db/insert-to-cache-no-authority-lst ignite group_id lst nil))
+
+;(defn update-to-cache [ignite group_id lst]
+;    (if-let [m-obj (my-update/my_update_obj ignite group_id lst {})]
+;        (let [{schema_name :schema_name table_name :table_name query-lst :query-lst sql :sql items :items select-args :args lst-ast :lst-ast} m-obj]
+;            (if-not (nil? lst-ast)
+;                (loop [it (.iterator (.query (.cache ignite (my-cache-name schema_name table_name)) (doto (SqlFieldsQuery. sql)
+;                                                                                                        (.setArgs (to-array select-args))
+;                                                                                                        (.setLazy true)))) lst-rs []]
+;                    (if (.hasNext it)
+;                        (if-let [row (.next it)]
+;                            (recur it (conj lst-rs (MyLogCache. (my-cache-name schema_name table_name) schema_name table_name (my-smart-db/get-update-key row (filter #(-> % :is-pk) query-lst)) (my-smart-db/get-update-value ignite group_id row (filter #(false? (-> % :is-pk)) query-lst) {:dic {}, :keys []} items) (SqlType/UPDATE)))))
+;                        lst-rs))
+;                [(MyLogCache. (my-lexical/my-cache-name schema_name table_name) schema_name table_name (my-smart-db/get-update-lst-ast ignite group_id lst-ast nil) (my-smart-db/get-update-lst-ast-value ignite group_id nil items) (SqlType/UPDATE))]))
+;        ))
 
 (defn update-to-cache [ignite group_id lst]
-    (if-let [m-obj (my-update/my_update_obj ignite group_id lst {})]
-        (if (contains? m-obj :k-v)
-            (let [{schema_name :schema_name table_name :table_name k-v :k-v items :items select-args :args} m-obj]
-                [(MyLogCache. (my-cache-name schema_name table_name) schema_name table_name (my-smart-db/get-update-k-v-key ignite group_id k-v select-args) (my-smart-db/get-update-k-v-value ignite group_id select-args items) (SqlType/UPDATE))])
-            (let [{schema_name :schema_name table_name :table_name query-lst :query-lst sql :sql items :items select-args :args} m-obj]
-                (loop [it (.iterator (.query (.cache ignite (my-cache-name schema_name table_name)) (doto (SqlFieldsQuery. sql)
-                                                                                                                   (.setArgs (to-array select-args))
-                                                                                                                   (.setLazy true)))) lst-rs []]
-                    (if (.hasNext it)
-                        (if-let [row (.next it)]
-                            (recur it (conj lst-rs (MyLogCache. (my-cache-name schema_name table_name) schema_name table_name (my-smart-db/get-update-key row (filter #(-> % :is-pk) query-lst)) (my-smart-db/get-update-value ignite group_id row (filter #(false? (-> % :is-pk)) query-lst) {:dic {}, :keys []} items) (SqlType/UPDATE)))))
-                        lst-rs))))
-        ))
+    (my-smart-db/update-to-cache ignite group_id lst nil))
+
+;(defn update-to-cache-no-authority [ignite group_id lst]
+;    (if-let [m-obj (my-update/my_update_obj-authority ignite group_id lst {})]
+;        (let [{schema_name :schema_name table_name :table_name query-lst :query-lst sql :sql items :items select-args :args lst-ast :lst-ast} m-obj]
+;            (if-not (nil? lst-ast)
+;                (loop [it (.iterator (.query (.cache ignite (my-cache-name schema_name table_name)) (doto (SqlFieldsQuery. sql)
+;                                                                                                        (.setArgs (to-array select-args))
+;                                                                                                        (.setLazy true)))) lst-rs []]
+;                    (if (.hasNext it)
+;                        (if-let [row (.next it)]
+;                            (recur it (conj lst-rs (MyLogCache. (my-cache-name schema_name table_name) schema_name table_name (my-smart-db/get-update-key row (filter #(-> % :is-pk) query-lst)) (my-smart-db/get-update-value ignite group_id row (filter #(false? (-> % :is-pk)) query-lst) {:dic {}, :keys []} items) (SqlType/UPDATE)))))
+;                        lst-rs))
+;                [(MyLogCache. (my-lexical/my-cache-name schema_name table_name) schema_name table_name (my-smart-db/get-update-lst-ast ignite group_id lst-ast nil) (my-smart-db/get-update-lst-ast-value ignite group_id nil items) (SqlType/UPDATE))]))
+;        ))
 
 (defn update-to-cache-no-authority [ignite group_id lst]
-    (if-let [m-obj (my-update/my_update_obj-authority ignite group_id lst {})]
-        (if (contains? m-obj :k-v)
-            (let [{schema_name :schema_name table_name :table_name k-v :k-v items :items select-args :args} m-obj]
-                [(MyLogCache. (my-cache-name schema_name table_name) schema_name table_name (my-smart-db/get-update-k-v-key ignite group_id k-v select-args) (my-smart-db/get-update-k-v-value ignite group_id select-args items) (SqlType/UPDATE))])
-            (let [{schema_name :schema_name table_name :table_name query-lst :query-lst sql :sql items :items select-args :args} m-obj]
-                (loop [it (.iterator (.query (.cache ignite (my-cache-name schema_name table_name)) (doto (SqlFieldsQuery. sql)
-                                                                                                                   (.setArgs (to-array select-args))
-                                                                                                                   (.setLazy true)))) lst-rs []]
-                    (if (.hasNext it)
-                        (if-let [row (.next it)]
-                            (recur it (conj lst-rs (MyLogCache. (my-cache-name schema_name table_name) schema_name table_name (my-smart-db/get-update-key row (filter #(-> % :is-pk) query-lst)) (my-smart-db/get-update-value ignite group_id row (filter #(false? (-> % :is-pk)) query-lst) {:dic {}, :keys []} items) (SqlType/UPDATE)))))
-                        lst-rs))))
-        ))
+    (my-smart-db/update-to-cache-no-authority ignite group_id lst nil))
+
+;(defn delete-to-cache [ignite group_id lst]
+;    (if-let [m-obj (my-delete/my_delete_obj ignite group_id lst {})]
+;        (if (contains? m-obj :k-v)
+;            (let [{schema_name :schema_name table_name :table_name k-v :k-v select-args :args} m-obj]
+;                [(MyLogCache. (my-cache-name schema_name table_name) schema_name table_name (my-smart-db/get-update-k-v-key ignite group_id k-v select-args) nil (SqlType/DELETE))])
+;            (let [{schema_name :schema_name table_name :table_name sql :sql select-args :args pk_lst :pk_lst} m-obj]
+;                (loop [it (.iterator (.query (.cache ignite (my-cache-name schema_name table_name)) (doto (SqlFieldsQuery. sql)
+;                                                                                                        (.setArgs (to-array select-args))
+;                                                                                                        (.setLazy true)))) lst-rs []]
+;                    (if (.hasNext it)
+;                        (if-let [row (.next it)]
+;                            (do
+;                                ;(println m-obj)
+;                                ;(println pk_lst)
+;                                ;(println (MyLogCache. table_name schema_name table_name (my-smart-db/get-delete-key row pk_lst) nil (SqlType/DELETE)))
+;                                ;(println "**********************")
+;                                (recur it (conj lst-rs (MyLogCache. (my-cache-name schema_name table_name) schema_name table_name (my-smart-db/get-delete-key row pk_lst) nil (SqlType/DELETE)))))
+;                            ;(recur it (conj lst-rs (MyLogCache. (my-cache-name schema_name table_name) schema_name table_name (my-smart-db/get-delete-key row pk_lst) nil (SqlType/DELETE))))
+;                            )
+;                        lst-rs))))
+;        )
+;    )
 
 (defn delete-to-cache [ignite group_id lst]
-    (if-let [m-obj (my-delete/my_delete_obj ignite group_id lst {})]
-        (if (contains? m-obj :k-v)
-            (let [{schema_name :schema_name table_name :table_name k-v :k-v select-args :args} m-obj]
-                [(MyLogCache. (my-cache-name schema_name table_name) schema_name table_name (my-smart-db/get-update-k-v-key ignite group_id k-v select-args) nil (SqlType/DELETE))])
-            (let [{schema_name :schema_name table_name :table_name sql :sql select-args :args pk_lst :pk_lst} m-obj]
-                (loop [it (.iterator (.query (.cache ignite (my-cache-name schema_name table_name)) (doto (SqlFieldsQuery. sql)
-                                                                                                                   (.setArgs (to-array select-args))
-                                                                                                                   (.setLazy true)))) lst-rs []]
-                    (if (.hasNext it)
-                        (if-let [row (.next it)]
-                            (do
-                                ;(println m-obj)
-                                ;(println pk_lst)
-                                ;(println (MyLogCache. table_name schema_name table_name (my-smart-db/get-delete-key row pk_lst) nil (SqlType/DELETE)))
-                                ;(println "**********************")
-                                (recur it (conj lst-rs (MyLogCache. (my-cache-name schema_name table_name) schema_name table_name (my-smart-db/get-delete-key row pk_lst) nil (SqlType/DELETE)))))
-                            ;(recur it (conj lst-rs (MyLogCache. (my-cache-name schema_name table_name) schema_name table_name (my-smart-db/get-delete-key row pk_lst) nil (SqlType/DELETE))))
-                            )
-                        lst-rs))))
-        )
-    )
+    (my-smart-db/delete-to-cache ignite group_id lst nil))
+
+;(defn delete-to-cache-no-authority [ignite group_id lst]
+;    (if-let [m-obj (my-delete/my_delete_obj-no-authority ignite group_id lst {})]
+;        (if (contains? m-obj :k-v)
+;            (let [{schema_name :schema_name table_name :table_name k-v :k-v select-args :args} m-obj]
+;                [(MyLogCache. (my-cache-name schema_name table_name) schema_name table_name (my-smart-db/get-update-k-v-key ignite group_id k-v select-args) nil (SqlType/DELETE))])
+;            (let [{schema_name :schema_name table_name :table_name sql :sql select-args :args pk_lst :pk_lst} m-obj]
+;                (loop [it (.iterator (.query (.cache ignite (my-cache-name schema_name table_name)) (doto (SqlFieldsQuery. sql)
+;                                                                                                        (.setArgs (to-array select-args))
+;                                                                                                        (.setLazy true)))) lst-rs []]
+;                    (if (.hasNext it)
+;                        (if-let [row (.next it)]
+;                            (recur it (conj lst-rs (MyLogCache. (my-cache-name schema_name table_name) schema_name table_name (my-smart-db/get-delete-key row pk_lst) nil (SqlType/DELETE)))))
+;                        lst-rs))))
+;        ))
 
 (defn delete-to-cache-no-authority [ignite group_id lst]
-    (if-let [m-obj (my-delete/my_delete_obj-no-authority ignite group_id lst {})]
-        (if (contains? m-obj :k-v)
-            (let [{schema_name :schema_name table_name :table_name k-v :k-v select-args :args} m-obj]
-                [(MyLogCache. (my-cache-name schema_name table_name) schema_name table_name (my-smart-db/get-update-k-v-key ignite group_id k-v select-args) nil (SqlType/DELETE))])
-            (let [{schema_name :schema_name table_name :table_name sql :sql select-args :args pk_lst :pk_lst} m-obj]
-                (loop [it (.iterator (.query (.cache ignite (my-cache-name schema_name table_name)) (doto (SqlFieldsQuery. sql)
-                                                                                                                   (.setArgs (to-array select-args))
-                                                                                                                   (.setLazy true)))) lst-rs []]
-                    (if (.hasNext it)
-                        (if-let [row (.next it)]
-                            (recur it (conj lst-rs (MyLogCache. (my-cache-name schema_name table_name) schema_name table_name (my-smart-db/get-delete-key row pk_lst) nil (SqlType/DELETE)))))
-                        lst-rs))))
-        ))
+    (my-smart-db/delete-to-cache-no-authority ignite group_id lst nil))
 
 (defn query-sql-no-args [ignite group_id lst]
     (cond (my-lexical/is-eq? "select" (first lst)) (if-let [ast (my-select-plus/sql-to-ast lst)]
                                                        (-> (my-select-plus-args/my-ast-to-sql ignite group_id nil ast) :sql))
           (my-lexical/is-eq? "insert" (first lst)) (let [logCache (insert-to-cache ignite group_id lst)]
-                                                       (if (nil? (MyCacheExUtil/transLogCache ignite (my-lexical/to_arryList [logCache])))
+                                                       (if (nil? (MyCacheExUtil/transLogCache ignite logCache))
                                                            "select show_msg('true') as tip;"
                                                            "select show_msg('false') as tip;"))
           (my-lexical/is-eq? "update" (first lst)) (let [logCache (update-to-cache ignite group_id lst)]
@@ -168,7 +193,7 @@
     (cond (my-lexical/is-eq? "select" (first lst)) (if-let [ast (my-select-plus/sql-to-ast lst)]
                                                        (-> (my-select-plus-args/my-ast-to-sql-no-authority ignite group_id nil ast) :sql))
           (my-lexical/is-eq? "insert" (first lst)) (let [logCache (insert-to-cache-no-authority ignite group_id lst)]
-                                                       (if (nil? (MyCacheExUtil/transLogCache ignite (my-lexical/to_arryList [logCache])))
+                                                       (if (nil? (MyCacheExUtil/transLogCache ignite (my-lexical/to_arryList logCache)))
                                                            "select show_msg('true') as tip;"
                                                            "select show_msg('false') as tip;"))
           (my-lexical/is-eq? "update" (first lst)) (let [logCache (update-to-cache-no-authority ignite group_id lst)]
@@ -209,7 +234,7 @@
     (cond (my-lexical/is-eq? "select" (first lst)) (if-let [ast (my-select-plus/sql-to-ast lst)]
                                                        (-> (my-select-plus-args/my-ast-to-sql ignite group_id nil ast) :sql))
           (my-lexical/is-eq? "insert" (first lst)) (let [logCache (insert-to-cache ignite group_id lst)]
-                                                       (if (nil? (MyCacheExUtil/transLogCache ignite (my-lexical/to_arryList [logCache])))
+                                                       (if (nil? (MyCacheExUtil/transLogCache ignite (my-lexical/to_arryList logCache)))
                                                            "true"
                                                            "false"))
           (my-lexical/is-eq? "update" (first lst)) (let [logCache (update-to-cache ignite group_id lst)]
@@ -233,7 +258,7 @@
     (cond (my-lexical/is-eq? "select" (first lst)) (if-let [ast (my-select-plus/sql-to-ast lst)]
                                                        (-> (my-select-plus-args/my-ast-to-sql-no-authority ignite group_id nil ast) :sql))
           (my-lexical/is-eq? "insert" (first lst)) (let [logCache (insert-to-cache-no-authority ignite group_id lst)]
-                                                       (if (nil? (MyCacheExUtil/transLogCache ignite (my-lexical/to_arryList [logCache])))
+                                                       (if (nil? (MyCacheExUtil/transLogCache ignite (my-lexical/to_arryList logCache)))
                                                            "true"
                                                            "false"))
           (my-lexical/is-eq? "update" (first lst)) (let [logCache (update-to-cache-no-authority ignite group_id lst)]
@@ -295,9 +320,23 @@
     (loop [[f & r] ast lst []]
         (if (some? f)
             (if (contains? f :sql_obj)
-                (recur r (conj lst (assoc f :sql_obj (assoc (-> f :sql_obj) :query-items [{:func-name "count", :lst_ps [{:operation_symbol "*"}]}]))))
+                (recur r (conj lst (assoc f :sql_obj (assoc (-> f :sql_obj) :order-by nil :query-items [{:func-name "count", :lst_ps [{:table_alias "",
+                                                                                                                         :item_name "1",
+                                                                                                                         :item_type "",
+                                                                                                                         :java_item_type java.lang.Integer,
+                                                                                                                         :const true}]}]))))
                 (recur r (conj lst f)))
             lst)))
+
+(defn rpc-ast-has-limit? [ast]
+    (loop [[f & r] ast flag false]
+        (if (some? f)
+            (if (contains? f :sql_obj)
+                (if (nil? (-> f :sql_obj :limit))
+                    (recur r flag)
+                    (recur nil true))
+                (recur r flag))
+            flag)))
 
 ;(defn rpc_select-authority [ignite group_id lst ps]
 ;    (if-let [ast (my-select-plus/sql-to-ast lst)]
@@ -310,10 +349,19 @@
 
 (defn re-rpc-select [ignite group_id lst ps]
     (let [ast (my-select-plus/sql-to-ast lst) limit-size (MyGson/getHashtable ps)]
-        (let [ast-limit (rpc-ast-limit ast (get limit-size "start") (get limit-size "limit")) ast-count (rpc-ast-count ast)]
-            (let [sql-limit (-> (my-select-plus-args/my-ast-to-sql ignite group_id nil ast-limit) :sql) sql-count (-> (my-select-plus-args/my-ast-to-sql ignite group_id nil ast-count) :sql) sql (lst-to-sql lst)]
-                (let [totalProperty (first (first (.getAll (.query (.cache ignite "public_meta") (SqlFieldsQuery. sql-count))))) root (.getAll (.query (.cache ignite "public_meta") (SqlFieldsQuery. sql-limit))) ht (MyColumnMeta/getColumnMeta sql)]
-                    (doto (Hashtable.) (.put "totalProperty" totalProperty) (.put "root" (MyColumnMeta/getColumnRow ht root))))))))
+        (if (false? (rpc-ast-has-limit? ast))
+            (let [ast-limit (rpc-ast-limit ast (get limit-size "start") (get limit-size "limit")) ast-count (rpc-ast-count ast)]
+                (let [sql-limit (-> (my-select-plus-args/my-ast-to-sql ignite group_id nil ast-limit) :sql) sql-count (-> (my-select-plus-args/my-ast-to-sql ignite group_id nil ast-count) :sql)]
+                    (if-let [all (.getAll (.query (.cache ignite "public_meta") (SqlFieldsQuery. sql-count)))]
+                        (if (= (count all) 1)
+                            (let [totalProperty (first (first all)) root (.getAll (.query (.cache ignite "public_meta") (SqlFieldsQuery. sql-limit))) ht (MyColumnMeta/getColumnMeta (lst-to-sql lst))]
+                                (doto (Hashtable.) (.put "totalProperty" totalProperty) (.put "root" (MyColumnMeta/getColumnRow ht root))))
+                            (let [totalProperty (count all) root (.getAll (.query (.cache ignite "public_meta") (SqlFieldsQuery. sql-limit))) ht (MyColumnMeta/getColumnMeta (lst-to-sql lst))]
+                                (doto (Hashtable.) (.put "totalProperty" totalProperty) (.put "root" (MyColumnMeta/getColumnRow ht root))))))))
+            (let [sql (-> (my-select-plus-args/my-ast-to-sql ignite group_id nil (my-select-plus/sql-to-ast lst)) :sql)]
+                (let [root (.getAll (.query (.cache ignite "public_meta") (SqlFieldsQuery. sql))) ht (MyColumnMeta/getColumnMeta (lst-to-sql lst))]
+                    (doto (Hashtable.) (.put "totalProperty" (.size root)) (.put "root" (MyColumnMeta/getColumnRow ht root))))))
+        ))
 
 (defn rpc_select-authority [ignite group_id lst ps]
     (if (my-lexical/null-or-empty? ps)
@@ -341,8 +389,8 @@
 (defn re-rpc-select-no-authority [ignite group_id lst ps]
     (let [ast (my-select-plus/sql-to-ast lst) limit-size (MyGson/getHashtable ps)]
         (let [ast-limit (rpc-ast-limit ast (get limit-size "start") (get limit-size "limit")) ast-count (rpc-ast-count ast)]
-            (let [sql-limit (-> (my-select-plus-args/my-ast-to-sql-no-authority ignite group_id nil ast-limit) :sql) sql-count (-> (my-select-plus-args/my-ast-to-sql-no-authority ignite group_id nil ast-count) :sql) sql (lst-to-sql lst)]
-                (let [totalProperty (first (first (.getAll (.query (.cache ignite "public_meta") (SqlFieldsQuery. sql-count))))) root (.getAll (.query (.cache ignite "public_meta") (SqlFieldsQuery. sql-limit))) ht (MyColumnMeta/getColumnMeta sql)]
+            (let [sql-limit (-> (my-select-plus-args/my-ast-to-sql-no-authority ignite group_id nil ast-limit) :sql) sql-count (-> (my-select-plus-args/my-ast-to-sql-no-authority ignite group_id nil ast-count) :sql) sql (-> (my-select-plus-args/my-ast-to-sql ignite group_id nil (my-select-plus/sql-to-ast lst)) :sql)]
+                (let [totalProperty (first (first (.getAll (.query (.cache ignite "public_meta") (SqlFieldsQuery. sql-count))))) root (.getAll (.query (.cache ignite "public_meta") (SqlFieldsQuery. sql-limit))) ht (MyColumnMeta/getColumnMeta (lst-to-sql lst))]
                     (doto (Hashtable.) (.put "totalProperty" totalProperty) (.put "root" (MyColumnMeta/getColumnRow ht root))))))))
 
 (defn rpc_select-no-authority [ignite group_id lst ps]

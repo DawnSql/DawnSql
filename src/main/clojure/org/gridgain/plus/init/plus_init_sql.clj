@@ -16,6 +16,8 @@
                     mode VARCHAR,
                     -- 最大的量
                     maxSize int,
+                    -- 分区备份数量
+                    backups int,
                     PRIMARY KEY (schema_name, table_name)
                     ) WITH \"template=MyMeta_template,cache_name=my_caches,KEY_TYPE=cn.plus.model.ddl.MyCachePK,VALUE_TYPE=cn.plus.model.ddl.MyCaches,ATOMICITY=TRANSACTIONAL,cache_group=my_meta\";
 
@@ -289,44 +291,46 @@
                     java_method_name VARCHAR(30),
                     cls_name VARCHAR,
                     return_type VARCHAR(20),
+                    ps_code VARCHAR,
                     descrip VARCHAR,
                     PRIMARY KEY (method_name)
                     ) WITH \"template=MyMeta_template,VALUE_TYPE=cn.plus.model.ddl.MyFunc,cache_name=my_func,ATOMICITY=TRANSACTIONAL,cache_group=my_meta\";
 
+    /**
     CREATE TABLE IF NOT EXISTS my_meta.my_func_ps (
                     method_name VARCHAR(30),
                     ps_index INTEGER,
                     ps_type VARCHAR(20),
                     PRIMARY KEY (method_name, ps_index)
                     ) WITH \"template=MyMeta_template,affinityKey=method_name,VALUE_TYPE=cn.plus.model.ddl.MyFuncPs,cache_name=my_func_ps,ATOMICITY=TRANSACTIONAL,cache_group=my_meta\";
-
+    */
 ")
 
 (def my-un-grid-tables
-    ["DROP TABLE IF EXISTS ml_train_data"
-     "DROP TABLE IF EXISTS my_caches"
-     "DROP TABLE IF EXISTS my_users_group"
-     ;"DROP TABLE IF EXISTS my_dataset"
-     ;"DROP TABLE IF EXISTS my_meta_tables"
-     ;"DROP TABLE IF EXISTS table_item"
-     ;"DROP TABLE IF EXISTS table_index"
-     ;"DROP TABLE IF EXISTS table_index_item"
+    ["DROP TABLE IF EXISTS my_meta.ml_train_data"
+     "DROP TABLE IF EXISTS my_meta.my_caches"
+     "DROP TABLE IF EXISTS my_meta.my_users_group"
+     ;"DROP TABLE IF EXISTS my_meta.my_dataset"
+     ;"DROP TABLE IF EXISTS my_meta.my_meta_tables"
+     ;"DROP TABLE IF EXISTS my_meta.table_item"
+     ;"DROP TABLE IF EXISTS my_meta.table_index"
+     ;"DROP TABLE IF EXISTS my_meta.table_index_item"
      ;"DROP INDEX IF EXISTS my_meta_tables_idx"
      ;"DROP INDEX IF EXISTS table_item_idx"
      ;"DROP INDEX IF EXISTS table_index_idx"
      ;"DROP INDEX IF EXISTS ot_ds_tname_idx"
-     "DROP TABLE IF EXISTS my_scenes"
+     "DROP TABLE IF EXISTS my_meta.my_scenes"
      "DROP INDEX IF EXISTS scenes_group_id_idx"
      "DROP INDEX IF EXISTS scenes_params_idx"
      "DROP INDEX IF EXISTS scenes_obj_tn_idx"
      "DROP INDEX IF EXISTS scenes_obj_in_idx"
      "DROP INDEX IF EXISTS my_scenes_log_create_date_idx"
-     "DROP TABLE IF EXISTS call_scenes"
+     "DROP TABLE IF EXISTS my_meta.call_scenes"
      "DROP INDEX IF EXISTS call_scenes_idx"
-     "DROP TABLE IF EXISTS my_select_views"
-     "DROP TABLE IF EXISTS my_update_views"
-     "DROP TABLE IF EXISTS my_insert_views"
-     "DROP TABLE IF EXISTS my_delete_views"
+     "DROP TABLE IF EXISTS my_meta.my_select_views"
+     "DROP TABLE IF EXISTS my_meta.my_update_views"
+     "DROP TABLE IF EXISTS my_meta.my_insert_views"
+     "DROP TABLE IF EXISTS my_meta.my_delete_views"
      ;"DROP TABLE IF EXISTS my_group_view"
      ;"DROP TABLE IF EXISTS my_log"
      ;"DROP INDEX IF EXISTS my_log_idx"

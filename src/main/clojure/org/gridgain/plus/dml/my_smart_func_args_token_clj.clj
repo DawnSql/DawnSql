@@ -174,7 +174,9 @@
                 ;                                  (format "(%s (my-lexical/get-value %s))" (my-lexical/smart-func method-name) let-name))
                 ;                              )
                 ; 系统函数
-                (contains? #{"first" "rest" "next" "second" "last"} (str/lower-case func-name)) (format "(%s %s)" (str/lower-case func-name) (get-lst-ps-vs ignite group_id lst_ps args-dic))
+                (contains? #{"next" "hasnext"} (str/lower-case func-name)) (format "(my-lexical/my-%s %s)" (str/lower-case func-name) (get-lst-ps-vs ignite group_id lst_ps args-dic))
+                ; 系统函数
+                (contains? #{"first" "rest" "second" "last"} (str/lower-case func-name)) (format "(%s %s)" (str/lower-case func-name) (get-lst-ps-vs ignite group_id lst_ps args-dic))
                 ; inner function
                 ;(get-inner-function-context (str/lower-case func-name) args-dic) (format "(%s %s)" func-name (get-lst-ps-vs ignite group_id lst_ps args-dic))
                 (my-lexical/is-eq? func-name "query_sql") (cond (= (count lst_ps) 1) (format "(my-smart-db/query_sql ignite group_id %s nil)" (get-lst-ps-vs ignite group_id lst_ps args-dic))
@@ -219,6 +221,9 @@
                 (my-lexical/is-eq? func-name "train_matrix_single") (format "(my-ml-train-data/train-matrix-single ignite group_id %s)" (get-lst-ps-vs ignite group_id lst_ps args-dic))
                 (my-lexical/is-eq? func-name "fit") (format "(my-ml-func/ml-fit ignite group_id %s)" (get-lst-ps-vs ignite group_id lst_ps args-dic))
                 (my-lexical/is-eq? func-name "predict") (format "(my-ml-func/ml-predict ignite group_id %s)" (get-lst-ps-vs ignite group_id lst_ps args-dic))
+
+                ; 输入一个方法名获取这个方法调用的所有函数和 smart code
+                (my-lexical/is-eq? func-name "get_smart_code") (format "(my-func-ast/get-func-code ignite group_id %s)" (get-lst-ps-vs ignite group_id lst_ps args-dic))
 
                 (is-func? ignite func-name) (if-not (empty? lst_ps)
                                                 (format "(my-smart-scenes/my-invoke-func ignite \"%s\" [%s])" func-name (get-lst-ps-vs ignite group_id lst_ps args-dic))
@@ -406,7 +411,7 @@
 
 ; args-dic 的终极使用在这里，通过匿名函数来替换真正的值
 (defn func-token-to-clj [ignite group_id m args-dic]
-    (if (contains? m :item_name)
+    (if (and (map? m) (contains? m :item_name))
         (my-item-to-clj m args-dic)
         (let [fn-line (token-to-clj ignite group_id m args-dic)]
             (if-not (Strings/isNullOrEmpty fn-line)

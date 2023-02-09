@@ -14,8 +14,21 @@ import java.util.List;
 public class MyGson {
     private static Gson gson = new GsonBuilder()
             .enableComplexMapKeySerialization()
+            .excludeFieldsWithoutExposeAnnotation()
+            .disableHtmlEscaping()
             .setDateFormat("yyyy-MM-dd HH:mm:ss")
             .create();
+
+    public static Object getJavaObj(final String line)
+    {
+        try {
+            return getHashtable(line);
+        }
+        catch (Exception e)
+        {
+            return line;
+        }
+    }
 
     public static Hashtable<String, Object> getHashtable(final String line)
     {

@@ -60,13 +60,19 @@ public class MyNoSqlUtil {
         return cfg;
     }
 
-    public static CacheConfiguration getNearCfg(final String cacheName, final String mode, final int maxSize)
+    public static CacheConfiguration getNearCfg(final String schema_name, final String cacheName, final String mode, final int maxSize, final int backups)
     {
         NearCacheConfiguration<Object, Object> nearCfg = new NearCacheConfiguration<>();
 
         // Use LRU eviction policy to automatically evict entries
         // from near-cache whenever it reaches 100_00 entries
-        nearCfg.setNearEvictionPolicyFactory(new LruEvictionPolicyFactory<>(maxSize));
+        if (maxSize > 0) {
+            nearCfg.setNearEvictionPolicyFactory(new LruEvictionPolicyFactory<>(maxSize));
+        }
+        else
+        {
+            nearCfg.setNearEvictionPolicyFactory(new LruEvictionPolicyFactory<>());
+        }
 
         CacheConfiguration<Object, Object> cfg = new CacheConfiguration<>();
         if (!Strings.isNullOrEmpty(mode) && mode.toLowerCase().equals("replicated")) {
@@ -75,9 +81,18 @@ public class MyNoSqlUtil {
         else
         {
             cfg.setCacheMode(CacheMode.PARTITIONED);
+            if (backups > 0) {
+                cfg.setBackups(backups);
+            }
         }
         cfg.setAtomicityMode(CacheAtomicityMode.TRANSACTIONAL);
-        cfg.setDataRegionName("Near_Caches_Region_Eviction");
+        if (!Strings.isNullOrEmpty(schema_name) && schema_name.toLowerCase().equals("my_meta")) {
+            cfg.setDataRegionName("MySys_Caches_Region_Eviction");
+        }
+        else
+        {
+            cfg.setDataRegionName("Near_Caches_Region_Eviction");
+        }
         cfg.setName(cacheName);
         cfg.setReadFromBackup(true);
         cfg.setNearConfiguration(nearCfg);
@@ -85,7 +100,7 @@ public class MyNoSqlUtil {
         return cfg;
     }
 
-    public static CacheConfiguration getCacheCfg(final String cacheName, final String mode)
+    public static CacheConfiguration getCacheCfg(final String cacheName, final String mode, final int backups)
     {
 
         CacheConfiguration<Object, Object> cfg = new CacheConfiguration<>();
@@ -95,6 +110,9 @@ public class MyNoSqlUtil {
         else
         {
             cfg.setCacheMode(CacheMode.PARTITIONED);
+            if (backups > 0) {
+                cfg.setBackups(backups);
+            }
         }
         cfg.setAtomicityMode(CacheAtomicityMode.TRANSACTIONAL);
         cfg.setName(cacheName);
@@ -103,16 +121,16 @@ public class MyNoSqlUtil {
         return cfg;
     }
 
-    public static void createCache(final Ignite ignite, final String ds_name, final String cacheName, final Boolean is_cache, final String mode, final int maxSize)
+    public static void createCache(final Ignite ignite, final String ds_name, final String cacheName, final Boolean is_cache, final String mode, final int maxSize, final int backups)
     {
         CacheConfiguration configuration;
         if (is_cache == true)
         {
-            configuration = getNearCfg(cacheName, mode, maxSize);
+            configuration = getNearCfg(ds_name, cacheName, mode, maxSize, backups);
         }
         else
         {
-            configuration = getCacheCfg(cacheName, mode);
+            configuration = getCacheCfg(cacheName, mode, backups);
         }
 
         if (myLog != null)
@@ -131,7 +149,14 @@ public class MyNoSqlUtil {
                 mySmartCache.setCacheDllType(CacheDllType.CREATE);
                 mySmartCache.setIs_cache(is_cache);
                 mySmartCache.setMode(mode);
-                mySmartCache.setMaxSize(maxSize);
+                if (maxSize > 0) {
+                    mySmartCache.setMaxSize(maxSize);
+                }
+
+                if (backups > 0)
+                {
+                    mySmartCache.setBackups(backups);
+                }
                 mySmartCache.setTable_name(cacheName);
 
                 myLog.saveTo(transSession, MyCacheExUtil.objToBytes(mySmartCache));
@@ -156,63 +181,81 @@ public class MyNoSqlUtil {
         }
     }
 
-    public static void createCacheSave(final Ignite ignite, final String schema_name, final String table_name, final Boolean is_cache, final String mode, final int maxSize)
-    {
+    public static void createCacheSave(final Ignite ignite, final String schema_name, final String table_name, final Boolean is_cache, final String mode, final int maxSize, final int backups) throws Exception {
         String cacheName = "c_" + schema_name.toLowerCase() + "_" + table_name.toLowerCase();
         CacheConfiguration configuration;
         if (is_cache == true)
         {
-            configuration = getNearCfg(cacheName, mode, maxSize);
+            configuration = getNearCfg(schema_name, cacheName, mode, maxSize, backups);
         }
         else
         {
-            configuration = getCacheCfg(cacheName, mode);
+            configuration = getCacheCfg(cacheName, mode, backups);
         }
 
         if (myLog != null)
         {
             configuration.setSqlSchema(schema_name);
-            ignite.getOrCreateCache(configuration);
+            IgniteCache<MyCachePK, MyCaches> my_caches = ignite.cache("my_caches");
+            MyCachePK key = new MyCachePK(schema_name, table_name);
+            if (!my_caches.containsKey(key)) {
+                ignite.getOrCreateCache(configuration);
 
-            IgniteTransactions transactions = ignite.transactions();
-            Transaction tx = null;
-            String transSession = UUID.randomUUID().toString();
-            try {
-                tx = transactions.txStart();
-                myLog.createSession(transSession);
+                IgniteTransactions transactions = ignite.transactions();
+                Transaction tx = null;
+                String transSession = UUID.randomUUID().toString();
+                try {
+                    tx = transactions.txStart();
+                    myLog.createSession(transSession);
 
-                MySmartCache mySmartCache = new MySmartCache();
-                mySmartCache.setCacheDllType(CacheDllType.CREATE);
-                mySmartCache.setIs_cache(is_cache);
-                mySmartCache.setMode(mode);
-                mySmartCache.setMaxSize(maxSize);
-                mySmartCache.setTable_name(cacheName);
+                    MySmartCache mySmartCache = new MySmartCache();
+                    mySmartCache.setCacheDllType(CacheDllType.CREATE);
+                    mySmartCache.setIs_cache(is_cache);
+                    mySmartCache.setMode(mode);
+                    if (maxSize > 0) {
+                        mySmartCache.setMaxSize(maxSize);
+                    }
 
-                myLog.saveTo(transSession, MyCacheExUtil.objToBytes(mySmartCache));
+                    if (backups > 0) {
+                        mySmartCache.setBackups(backups);
+                    }
+                    mySmartCache.setTable_name(cacheName);
 
-                IgniteCache<MyCachePK, MyCaches> my_caches = ignite.cache("my_caches");
-                my_caches.put(new MyCachePK(schema_name, table_name), new MyCaches(schema_name, table_name, is_cache, mode, maxSize));
+                    myLog.saveTo(transSession, MyCacheExUtil.objToBytes(mySmartCache));
 
-                myLog.commit(transSession);
-                tx.commit();
-            } catch (Exception ex) {
-                if (tx != null) {
-                    myLog.rollback(transSession);
-                    tx.rollback();
-                    ignite.destroyCache(cacheName);
+                    my_caches.put(key, new MyCaches(schema_name, table_name, is_cache, mode, maxSize, backups));
+
+                    myLog.commit(transSession);
+                    tx.commit();
+                } catch (Exception ex) {
+                    if (tx != null) {
+                        myLog.rollback(transSession);
+                        tx.rollback();
+                        ignite.destroyCache(cacheName);
+                    }
+                } finally {
+                    if (tx != null) {
+                        tx.close();
+                    }
                 }
-            } finally {
-                if (tx != null) {
-                    tx.close();
-                }
+            }
+            else
+            {
+                throw new Exception(table_name + "已经存在，不能新建！");
             }
         }
         else
         {
-            ignite.getOrCreateCache(configuration);
-
             IgniteCache<MyCachePK, MyCaches> my_caches = ignite.cache("my_caches");
-            my_caches.put(new MyCachePK(schema_name, table_name), new MyCaches(schema_name, table_name, is_cache, mode, maxSize));
+            MyCachePK key = new MyCachePK(schema_name, table_name);
+            if (!my_caches.containsKey(key)) {
+                ignite.getOrCreateCache(configuration);
+                my_caches.put(key, new MyCaches(schema_name, table_name, is_cache, mode, maxSize, backups));
+            }
+            else
+            {
+                throw new Exception(table_name + "已经存在，不能新建！");
+            }
         }
     }
 
@@ -271,8 +314,7 @@ public class MyNoSqlUtil {
         }
     }
 
-    public static void runCache(final Ignite ignite, final MyNoSqlCache myNoSqlCache)
-    {
+    public static void runCache(final Ignite ignite, final MyNoSqlCache myNoSqlCache) throws Exception {
         List<MyNoSqlCache> lst = new ArrayList<>();
         lst.add(myNoSqlCache);
         MyCacheExUtil.transLogCache(ignite, lst);
@@ -286,14 +328,14 @@ public class MyNoSqlUtil {
 
         ignite.getOrCreateCache(cfg);
 
-        SqlFieldsQuery sqlFieldsQuery = new SqlFieldsQuery("select m.schema_name, m.table_name, m.is_cache, m.mode, m.maxSize from MY_META.my_caches m");
+        SqlFieldsQuery sqlFieldsQuery = new SqlFieldsQuery("select m.schema_name, m.table_name, m.is_cache, m.mode, m.maxSize, m.backups from MY_META.my_caches m");
         sqlFieldsQuery.setLazy(true);
         Iterator<List<?>> iterator = ignite.cache("my_caches").query(sqlFieldsQuery).iterator();
         while (iterator.hasNext())
         {
             List<?> row = iterator.next();
             String cache_name = "c_" + row.get(0).toString().toLowerCase() + "_" + row.get(1).toString().toLowerCase();
-            MyNoSqlUtil.createCache(ignite, row.get(0).toString(), cache_name, MyConvertUtil.ConvertToBoolean(row.get(2)), row.get(3).toString(), MyConvertUtil.ConvertToInt(row.get(4)));
+            MyNoSqlUtil.createCache(ignite, row.get(0).toString(), cache_name, MyConvertUtil.ConvertToBoolean(row.get(2)), row.get(3).toString(), MyConvertUtil.ConvertToInt(row.get(4)), MyConvertUtil.ConvertToInt(row.get(5)));
             System.out.println(cache_name + " 初始化成功！");
         }
     }
