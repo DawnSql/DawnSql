@@ -12,7 +12,7 @@
         [clojure.string :as str]
         [clojure.walk :as w])
     (:import (org.apache.ignite Ignite)
-             (org.tools MyConvertUtil MyPlusUtil MyGson KvSql MyDbUtil)
+             (org.tools MyConvertUtil MyPlusUtil MyGson MyJobUtil KvSql MyDbUtil)
              (com.google.common.base Strings)
              (org.gridgain.dml.util MyCacheExUtil)
              (cn.plus.model.db MyCallScenesPk MyCallScenes MyScenesCache ScenesType MyScenesParams MyScenesParamsPk MyScenesCachePk)
@@ -33,6 +33,7 @@
         ; 生成 java 静态的方法
         :methods [^:static [smart_view [org.apache.ignite.Ignite Object String String] String]
                   ^:static [initJob [org.apache.ignite.Ignite] void]
+                  ^:static [myRunJob [org.apache.ignite.Ignite Object Object Object] Object]
                   ^:static [recoveryToCluster [org.apache.ignite.Ignite Object] void]]
         ))
 
@@ -282,6 +283,9 @@
                                                                     (my-smart-scenes/my-invoke-scenes-no-ps ignite group_id job-name))
           ))
 
+(defn -myRunJob [ignite group_id job-name ps]
+    (run-job ignite group_id job-name ps))
+
 (defn init-add-job [^Ignite ignite ^Long my-group-id ^String job-name ^Object ps ^String cron]
     (if-let [scheduleProcessor (MyPlusUtil/getIgniteScheduleProcessor ignite)]
         (if-let [scheduledFutures (.getScheduledFutures scheduleProcessor)]
@@ -291,7 +295,8 @@
                         (.scheduleLocal (.scheduler ignite) job-name (proxy [Object Runnable] []
                                                                          (run []
                                                                              ;(my-smart-scenes/my-invoke-scenes ignite group_id job-name ps)
-                                                                             (run-job ignite (my-user-group/get-user-group-by-id ignite my-group-id) job-name ps)
+                                                                             ;(run-job ignite (my-user-group/get-user-group-by-id ignite my-group-id) job-name ps)
+                                                                             (MyJobUtil/myRunJob (my-user-group/get-user-group-by-id ignite my-group-id) job-name ps)
                                                                              ))
                                         cron-line))
                     (catch Exception ex
@@ -325,7 +330,8 @@
                         (if-not (nil? (.scheduleLocal (.scheduler ignite) job-name (proxy [Object Runnable] []
                                                                                        (run []
                                                                                            ;(my-smart-scenes/my-invoke-scenes ignite group_id job-name ps)
-                                                                                           (run-job ignite group_id job-name ps)
+                                                                                           ;(run-job ignite group_id job-name ps)
+                                                                                           (MyJobUtil/myRunJob group_id job-name ps)
                                                                                            ))
                                                       cron-line))
                             (.put my-cron-cache job-name (MCron. job-name (first group_id) cron-line (my-lexical/gson ps)))))
